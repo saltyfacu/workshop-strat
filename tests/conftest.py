@@ -2,7 +2,6 @@ import pytest
 from brownie import config
 from brownie import Contract
 
-
 @pytest.fixture
 def gov(accounts):
     yield accounts.at("0xFEB4acf3df3cDEA7399794D0869ef76A6EfAff52", force=True)
@@ -37,12 +36,23 @@ def strategist(accounts):
 def keeper(accounts):
     yield accounts[5]
 
+@pytest.fixture
+def gov(accounts):
+    yield accounts[6]
+
+@pytest.fixture
+def yfi_whale(accounts, yfi):
+    yfi.mint(accounts[7], "100 ether")
+    yield accounts[7]
 
 @pytest.fixture
 def token():
-    token_address = "0x6b175474e89094c44da98b954eedeac495271d0f"  # this should be the address of the ERC-20 used by the strategy/vault (DAI)
+    token_address = "0x6b175474e89094c44da98b954eedeac495271d0f"  # DAI
     yield Contract(token_address)
 
+@pytest.fixture
+def yfi(Token, gov):
+    yield gov.deploy(Token, "YFI")
 
 @pytest.fixture
 def amount(accounts, token, user):
@@ -66,6 +76,11 @@ def weth_amout(user, weth):
     user.transfer(weth, weth_amout)
     yield weth_amout
 
+@pytest.fixture
+def masterchef(MasterChef, web3, gov, yfi):
+    masterchef = gov.deploy(MasterChef, yfi, gov, "1 ether", web3.eth.block_number, web3.eth.block_number + 1000000)
+    masterchef.add(1000, yfi, 1)
+    yield masterchef
 
 @pytest.fixture
 def vault(pm, gov, rewards, guardian, management, token):
@@ -78,8 +93,8 @@ def vault(pm, gov, rewards, guardian, management, token):
 
 
 @pytest.fixture
-def strategy(strategist, keeper, vault, Strategy, gov):
-    strategy = strategist.deploy(Strategy, vault)
+def strategy(strategist, keeper, vault, Strategy, gov, masterchef):
+    strategy = strategist.deploy(Strategy, vault, masterchef, 0)
     strategy.setKeeper(keeper)
     vault.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov})
     yield strategy
