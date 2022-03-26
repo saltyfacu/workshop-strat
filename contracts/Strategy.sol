@@ -27,25 +27,26 @@ contract Strategy is BaseStrategy {
     using Address for address;
     using SafeMath for uint256;
 
-    address masterchef;
-    uint256 pid; //the pool id of the masterchef
+    address public masterchef;
+    uint256 public pid; //the pool id of the masterchef
 
-    address router = address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
-    address weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-    address yfi = address(0x0bc529c00C6401aEF6D220BE8C6Ea1667F6Ad93e);
+    address public router = address(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+    address public weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+    address public yfi;
 
-    constructor(address _vault, address _masterchef, uint256 _pid) public BaseStrategy(_vault) {
+    constructor(address _vault, address _masterchef, address _yfi, uint256 _pid) public BaseStrategy(_vault) {
         // You can set these parameters on deployment to whatever you want
         // maxReportDelay = 6300;
         // profitFactor = 100;
         // debtThreshold = 0;
 
         maxReportDelay = 6300;
-        profitFactor = 1500;
-        debtThreshold = 1_000_000 * 1e18;
+        //profitFactor = 100;
+        //debtThreshold = 1_000_000 * 1e18;
 
         masterchef = _masterchef;
         pid = _pid;
+        yfi = _yfi;
         
         want.safeApprove(masterchef, uint256(-1));
         IERC20(yfi).safeApprove(router, uint256(-1));
@@ -60,8 +61,8 @@ contract Strategy is BaseStrategy {
     }
 
     function estimatedTotalAssets() public view override returns (uint256) {
-        // TODO: Build a more accurate estimate using the value of all positions in terms of `want`
-        return want.balanceOf(address(this));
+        (uint256 deposited, ) = IChefLike(masterchef).userInfo(pid, address(this));
+        return want.balanceOf(address(this)).add(deposited);
     }
 
     function _sell() internal
@@ -95,9 +96,9 @@ contract Strategy is BaseStrategy {
             uint256 _debtPayment
         )
     {
-        IChefLike(masterchef).deposit(pid, 0); //why?
+        IChefLike(masterchef).deposit(pid, 0);
 
-        _sell(); // we still need to code this
+        _sell(); 
 
         uint256 assets = estimatedTotalAssets();
         uint256 debt = vault.strategies(address(this)).totalDebt;
@@ -152,6 +153,12 @@ contract Strategy is BaseStrategy {
         uint256 totalAssets = want.balanceOf(address(this));
         if (_amountNeeded > totalAssets) {
             uint256 assetsToFree = _amountNeeded.sub(totalAssets);
+
+            (uint256 depositInPool, ) = IChefLike(masterchef).userInfo(pid, address(this));
+            if (depositInPool < assetsToFree) {
+                assetsToFree = depositInPool;
+            }
+
             IChefLike(masterchef).withdraw(pid, assetsToFree);
 
             _liquidatedAmount = want.balanceOf(address(this));
@@ -163,6 +170,7 @@ contract Strategy is BaseStrategy {
 
     function liquidateAllPositions() internal override returns (uint256) {
         // TODO: Liquidate all positions and return the amount freed.
+        liquidatePosition(uint256(-1));
         return want.balanceOf(address(this));
     }
 
