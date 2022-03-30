@@ -52,7 +52,6 @@ def token():
 
 @pytest.fixture
 def yfi():
-    #yield gov.deploy(Token, "YFI")
     yfi_address = "0x0bc529c00C6401aEF6D220BE8C6Ea1667F6Ad93e"
     yield Contract(yfi_address)
 
@@ -84,7 +83,7 @@ def weth_amout(user, weth):
 
 @pytest.fixture
 def masterchef(MasterChef, web3, gov, yfi, token, daddy):
-    masterchef = gov.deploy(MasterChef, yfi, gov, "1 ether", web3.eth.block_number, web3.eth.block_number + 1000000)
+    masterchef = gov.deploy(MasterChef, yfi, gov, 10**9, web3.eth.block_number, web3.eth.block_number + 1000000)
     yfi.addMinter(masterchef, {"from": daddy})
     masterchef.add(1000, token, 1)
 
@@ -102,7 +101,7 @@ def vault(pm, gov, rewards, guardian, management, token):
 
 @pytest.fixture
 def strategy(strategist, keeper, vault, Strategy, gov, masterchef, yfi):
-    strategy = strategist.deploy(Strategy, vault, masterchef, yfi, 0)
+    strategy = strategist.deploy(Strategy, vault, masterchef, 0)
     strategy.setKeeper(keeper, {"from": gov})
     vault.addStrategy(strategy, 10_000, 0, 2 ** 256 - 1, 1_000, {"from": gov})
     yield strategy
